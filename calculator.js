@@ -43,12 +43,80 @@
     return result;
   }
 
-  function capacity(budget, price, priceField = "buyPrice") {
+  // Percentage precision: seven decimal places (e.g. 0.0036396%).
+  const RATE_SCALE = 1000000000n;
+  function parseRate(value) {
+    const raw = String(value ?? "").trim();
+    if (!raw) throw new InputError("feeRate", "매수 수수료율을 입력해 주세요.");
+    if (raw.length > 20 || !/^\d+(?:\.\d{1,7})?$/.test(raw)) {
+      throw new InputError(
+        "feeRate",
+        "수수료율은 소수 일곱째 자리까지 입력해 주세요.",
+      );
+    }
+    const [whole, decimal = ""] = raw.split(".");
+    const rate = BigInt(whole) * 10000000n + BigInt(decimal.padEnd(7, "0"));
+    if (rate > RATE_SCALE)
+      throw new InputError(
+        "feeRate",
+        "수수료율은 0~100% 사이로 입력해 주세요.",
+      );
+    return rate;
+  }
+
+  function feeSettings(input = {}) {
+    const rounding = input.feeRounding ?? "ceil-won";
+    if (
+      !["ceil-won", "floor-won", "floor-ten-won", "ceil-cent"].includes(
+        rounding,
+      )
+    ) {
+      throw new InputError("feeRate", "수수료 계산 단위를 선택해 주세요.");
+    }
+    return {
+      rate: parseRate(input.feeRate ?? "0"),
+      minimum: parse(input.minimumFee ?? "0", "minimumFee"),
+      fixed: parse(input.fixedFee ?? "0", "fixedFee"),
+      rounding,
+    };
+  }
+
+  function feeForCost(cost, fees) {
+    if (cost === 0n) return 0n;
+    const unit =
+      fees.rounding === "ceil-cent"
+        ? 1n
+        : fees.rounding === "floor-ten-won"
+          ? 1000n
+          : 100n;
+    const numerator = cost * fees.rate + fees.fixed * RATE_SCALE;
+    const denominator = RATE_SCALE * unit;
+    const rounded =
+      (fees.rounding.startsWith("ceil")
+        ? (numerator + denominator - 1n) / denominator
+        : numerator / denominator) * unit;
+    return rounded < fees.minimum ? fees.minimum : rounded;
+  }
+
+  // Includes minimum/fixed fees and rounding. Search the maximum feasible quantity.
+  function affordableQuantity(funds, unitPrice, fees) {
+    let low = 0n;
+    let high = funds / unitPrice;
+    while (low < high) {
+      const middle = (low + high + 1n) / 2n;
+      const principal = middle * unitPrice;
+      if (principal + feeForCost(principal, fees) <= funds) low = middle;
+      else high = middle - 1n;
+    }
+    return low;
+  }
+
+  function capacity(budget, price, priceField = "buyPrice", feeInput = {}) {
     const funds = parse(budget, "budget");
     const unitPrice = parse(price, priceField);
     if (unitPrice === 0n)
       throw new InputError(priceField, "단가는 0원보다 커야 해요.");
-    return funds / unitPrice;
+    return affordableQuantity(funds, unitPrice, feeSettings(feeInput));
   }
 
   function calculate(input) {
@@ -59,6 +127,7 @@
     const buyPrice = input.useMarketPrice
       ? marketPrice
       : parse(input.buyPrice, "buyPrice");
+    const fees = feeSettings(input);
     if (heldQuantity > 0n && heldPrice === 0n)
       throw new InputError(
         "heldPrice",
@@ -68,7 +137,7 @@
       throw new InputError("marketPrice", "현재가는 0원보다 커야 해요.");
     if (buyPrice === 0n)
       throw new InputError("buyPrice", "매수 단가는 0원보다 커야 해요.");
-    const maxBuyQuantity = budget / buyPrice;
+    const maxBuyQuantity = affordableQuantity(budget, buyPrice, fees);
     const buyQuantity = input.useMaxQuantity
       ? maxBuyQuantity
       : parse(input.buyQuantity, "buyQuantity", true);
@@ -79,7 +148,9 @@
       );
     const heldCost = heldQuantity * heldPrice;
     const purchaseCost = buyQuantity * buyPrice;
-    const totalCost = heldCost + purchaseCost;
+    const purchaseFee = feeForCost(purchaseCost, fees);
+    const purchaseTotal = purchaseCost + purchaseFee;
+    const totalCost = heldCost + purchaseTotal;
     const totalQuantity = heldQuantity + buyQuantity;
     const beforeValue = heldQuantity * marketPrice;
     const afterValue = totalQuantity * marketPrice;
@@ -105,14 +176,23 @@
       marketPrice: money(marketPrice),
       buyPrice: money(buyPrice),
       buyQuantity: Number(buyQuantity),
-      currentPriceCapacity: Number(budget / marketPrice),
+      currentPriceCapacity: Number(
+        affordableQuantity(budget, marketPrice, fees),
+      ),
       maxBuyQuantity: Number(maxBuyQuantity),
       heldCost: money(heldCost),
       purchaseCost: money(purchaseCost),
+      purchaseFee: money(purchaseFee),
+      purchaseTotal: money(purchaseTotal),
+      feeRate: Number(fees.rate) / 10000000,
+      priceAverage:
+        totalQuantity > 0n
+          ? money(heldCost + purchaseCost) / Number(totalQuantity)
+          : null,
       totalCost: money(totalCost),
       totalQuantity: Number(totalQuantity),
-      remainingBudget: money(budget - purchaseCost),
-      overBudget: purchaseCost > budget,
+      remainingBudget: money(budget - purchaseTotal),
+      overBudget: purchaseTotal > budget,
       average,
       averageChange,
       averageChangePercent:
@@ -121,8 +201,8 @@
           : (averageChange / money(heldPrice)) * 100,
       budgetUsage:
         budget > 0n
-          ? (Number(purchaseCost) / Number(budget)) * 100
-          : purchaseCost > 0n
+          ? (Number(purchaseTotal) / Number(budget)) * 100
+          : purchaseTotal > 0n
             ? null
             : 0,
       beforePnl: money(beforePnl),
@@ -133,7 +213,13 @@
         totalCost > 0n ? (Number(afterPnl) / Number(totalCost)) * 100 : null,
     };
   }
-  const api = Object.freeze({ calculate, capacity, parse, InputError });
+  const api = Object.freeze({
+    calculate,
+    capacity,
+    parse,
+    parseRate,
+    InputError,
+  });
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.StockCalculator = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

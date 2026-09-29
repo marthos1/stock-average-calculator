@@ -23,7 +23,8 @@ body {
   margin: 0;
 }
 button,
-input {
+input,
+select {
   font: inherit;
 }
 button,
@@ -584,7 +585,7 @@ legend + * {
 }
 .budget-track > div {
   height: 100%;
-  width: 100%;
+  width: 0%;
   background: #769764;
   border-radius: 5px;
   transition: width 0.2s;
@@ -901,5 +902,92 @@ legend + * {
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
+  }
+}
+
+/* Broker fees and the empty starting state. */
+.field select {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  padding: 0 10px;
+  border: 1px solid #dce2d8;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+}
+.field select:focus-visible {
+  outline: 3px solid #70ae8b;
+  outline-offset: 2px;
+}
+.fee-rate-field {
+  margin-top: 16px;
+}
+.fee-source {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--green);
+  margin-top: 8px;
+}
+.fee-source[hidden] {
+  display: none;
+}
+.fee-advanced {
+  margin-top: 15px;
+  padding: 12px;
+  background: #f5f7f3;
+  border-radius: 10px;
+}
+.fee-advanced summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: #536157;
+}
+.fee-advanced .field-grid {
+  margin-top: 16px;
+}
+.fee-advanced > .field {
+  margin-top: 16px;
+}
+.fee-breakdown,
+.total-spend,
+.price-average-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 14px;
+  font-size: 12px;
+}
+.fee-breakdown {
+  margin-top: 14px;
+  color: #737f6f;
+}
+.fee-breakdown strong {
+  font-weight: 500;
+}
+.total-spend {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  margin-top: 14px;
+  color: var(--green);
+}
+.total-spend strong {
+  font-size: 20px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.price-average-line {
+  padding: 1px 8px;
+  color: #6f7f68;
+  font-size: 11px;
+}
+.price-average-line strong {
+  font-weight: 500;
+}
+@media (min-width: 681px) {
+  .results {
+    position: sticky;
+    top: 20px;
   }
 }

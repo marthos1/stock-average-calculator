@@ -12,6 +12,7 @@
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
     <script src="calculator.js" defer></script>
+    <script src="brokers.js" defer></script>
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -68,7 +69,6 @@
                       name="heldQuantity"
                       type="text"
                       inputmode="numeric"
-                      value="100"
                       autocomplete="off"
                       aria-describedby="held-quantity-error"
                     /><span>주</span>
@@ -85,7 +85,6 @@
                       name="heldPrice"
                       type="text"
                       inputmode="decimal"
-                      value="18,000"
                       autocomplete="off"
                       aria-describedby="held-price-error"
                     /><span>원</span>
@@ -106,7 +105,6 @@
                     name="budget"
                     type="text"
                     inputmode="decimal"
-                    value="600,000"
                     autocomplete="off"
                     aria-describedby="budget-error"
                   /><span>원</span>
@@ -118,8 +116,7 @@
                 ><button
                   type="button"
                   data-budget="600000"
-                  class="selected"
-                  aria-pressed="true"
+                  aria-pressed="false"
                 >
                   60만</button
                 ><button type="button" data-budget="1000000">100만</button
@@ -136,7 +133,6 @@
                     name="marketPrice"
                     type="text"
                     inputmode="decimal"
-                    value="12,500"
                     autocomplete="off"
                     aria-describedby="market-price-error"
                   /><span>원</span>
@@ -146,12 +142,100 @@
               <div class="afford-callout">
                 <span class="small-icon" aria-hidden="true">＋</span>
                 <p id="afford-text">
-                  현재가로 최대 <strong>48주</strong> 살 수 있어요.
+                  예산·현재가·수수료를 입력하면 매수 가능 수량이 나와요.
                 </p>
               </div>
             </fieldset>
+            <fieldset class="fee-fields">
+              <legend>
+                <span class="step">03</span> 수수료까지 예산에 담기
+              </legend>
+              <div class="field">
+                <label for="broker">증권사 · 거래소</label>
+                <select id="broker" aria-describedby="broker-note">
+                  <option value="">증권사와 거래소를 선택하세요</option>
+                </select>
+              </div>
+              <div class="field fee-rate-field">
+                <label for="fee-rate"
+                  >매수 수수료율
+                  <span class="label-hint">직접 수정 가능</span></label
+                >
+                <div class="input-wrap">
+                  <input
+                    id="fee-rate"
+                    name="feeRate"
+                    type="text"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    aria-describedby="fee-rate-error"
+                  /><span>%</span>
+                </div>
+                <p class="field-error" id="fee-rate-error"></p>
+              </div>
+              <p class="field-note" id="broker-note">
+                선택한 요율로 추가 매수 수수료를 계산해요. 계좌별 우대 수수료는
+                직접 입력해 주세요.
+              </p>
+              <a
+                id="fee-source"
+                class="fee-source"
+                target="_blank"
+                rel="noopener noreferrer"
+                hidden
+                >공식 수수료 안내 ↗</a
+              >
+              <details class="fee-advanced">
+                <summary>수수료 상세 설정</summary>
+                <div class="field-grid">
+                  <div class="field">
+                    <label for="minimum-fee">최소 수수료</label>
+                    <div class="input-wrap">
+                      <input
+                        id="minimum-fee"
+                        name="minimumFee"
+                        type="text"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        aria-describedby="minimum-fee-error"
+                      /><span>원</span>
+                    </div>
+                    <p class="field-error" id="minimum-fee-error"></p>
+                  </div>
+                  <div class="field">
+                    <label for="fixed-fee">건당 정액 수수료</label>
+                    <div class="input-wrap">
+                      <input
+                        id="fixed-fee"
+                        name="fixedFee"
+                        type="text"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        aria-describedby="fixed-fee-error"
+                      /><span>원</span>
+                    </div>
+                    <p class="field-error" id="fixed-fee-error"></p>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="fee-rounding">수수료 계산 단위</label
+                  ><select id="fee-rounding">
+                    <option value="ceil-won">
+                      1원 미만 올림 (예산 확보용)
+                    </option>
+                    <option value="floor-won">1원 미만 버림</option>
+                    <option value="floor-ten-won">10원 미만 버림</option>
+                    <option value="ceil-cent">0.01원 미만 올림</option>
+                  </select>
+                </div>
+              </details>
+              <p class="field-note">
+                기본은 1원 미만 올림으로 예상 비용을 계산해요. 실제 계좌의 절사
+                방식은 상세 설정에서 바꿀 수 있어요.
+              </p>
+            </fieldset>
             <fieldset class="purchase-fields">
-              <legend><span class="step">03</span> 추가 매수 설정</legend>
+              <legend><span class="step">04</span> 추가 매수 설정</legend>
               <div class="purchase-options">
                 <label class="checkbox-label"
                   ><input id="use-market-price" type="checkbox" checked />
@@ -174,7 +258,6 @@
                       type="text"
                       inputmode="numeric"
                       readonly
-                      value="48"
                       autocomplete="off"
                       aria-describedby="buy-quantity-error"
                     /><span>주</span>
@@ -190,7 +273,6 @@
                       type="text"
                       inputmode="decimal"
                       readonly
-                      value="12,500"
                       autocomplete="off"
                       aria-describedby="buy-price-error"
                     /><span>원</span>
@@ -212,25 +294,24 @@
         >
           <div class="result-hero">
             <div class="result-header">
-              <h2 id="result-title">매수 후 예상 평균단가</h2>
+              <h2 id="result-title">수수료 포함 예상 평균단가</h2>
               <span class="live-badge"><span></span> 자동 계산</span>
             </div>
             <p class="average-value">
-              <span id="new-average">16,216.22</span
-              ><span class="value-unit">원</span>
+              <span id="new-average">—</span>
+              <span class="value-unit">원</span>
             </p>
             <p class="average-change" id="average-change">
-              기존보다 1,783.78원 낮아져요
+              보유 현황과 매수 계획을 입력해 주세요.
             </p>
             <div class="average-compare">
               <div>
-                <span>현재 평균단가</span
-                ><strong id="old-average">18,000원</strong>
+                <span>현재 평균단가</span><strong id="old-average">—</strong>
               </div>
               <span class="compare-arrow" aria-hidden="true">→</span>
               <div>
                 <span>평균단가 변화</span
-                ><strong id="average-percent">−9.91%</strong>
+                ><strong id="average-percent">—</strong>
               </div>
             </div>
           </div>
@@ -238,22 +319,30 @@
           <div class="panel budget-summary">
             <div class="panel-heading">
               <h2>예산 사용 계획</h2>
-              <span id="budget-percent" class="percent-tag">100%</span>
+              <span id="budget-percent" class="percent-tag">—</span>
             </div>
             <div class="spend-line">
-              <span>추가 매수 금액</span
-              ><strong id="purchase-cost">600,000원</strong>
+              <span>추가 매수 금액</span><strong id="purchase-cost">—</strong>
+            </div>
+            <div class="fee-breakdown">
+              <span>예상 매수 수수료</span><strong id="purchase-fee">—</strong>
+            </div>
+            <div class="total-spend">
+              <span>수수료 포함 총 사용액</span
+              ><strong id="purchase-total">—</strong>
             </div>
             <div class="budget-track" aria-hidden="true">
               <div id="budget-bar"></div>
             </div>
             <div class="remaining-line">
               <span id="remaining-label">남는 예산</span
-              ><strong id="remaining-budget">0원</strong>
+              ><strong id="remaining-budget">—</strong>
             </div>
-            <p class="budget-caption" id="purchase-description">
-              12,500원 × 48주
-            </p>
+            <p class="budget-caption" id="purchase-description"></p>
+          </div>
+          <div class="price-average-line">
+            <span>추가 수수료 제외 평균단가</span
+            ><strong id="price-average">—</strong>
           </div>
           <div class="panel details">
             <h2>한눈에 보는 매수 전·후</h2>
@@ -271,29 +360,32 @@
               <tbody>
                 <tr>
                   <th scope="row">보유 수량</th>
-                  <td id="before-quantity">100주</td>
-                  <td id="after-quantity">148주</td>
+                  <td id="before-quantity">—</td>
+                  <td id="after-quantity">—</td>
                 </tr>
                 <tr>
-                  <th scope="row">총 매입금액</th>
-                  <td id="before-cost">1,800,000원</td>
-                  <td id="after-cost">2,400,000원</td>
+                  <th scope="row">총 투입금액</th>
+                  <td id="before-cost">—</td>
+                  <td id="after-cost">—</td>
                 </tr>
                 <tr>
                   <th scope="row">평가손익</th>
-                  <td id="before-pnl">−550,000원</td>
-                  <td id="after-pnl">−550,000원</td>
+                  <td id="before-pnl">—</td>
+                  <td id="after-pnl">—</td>
                 </tr>
                 <tr>
                   <th scope="row">수익률</th>
-                  <td id="before-return">−30.56%</td>
-                  <td id="after-return">−22.92%</td>
+                  <td id="before-return">—</td>
+                  <td id="after-return">—</td>
                 </tr>
               </tbody>
             </table>
-            <p class="field-note">평가손익은 입력한 현재가 기준입니다.</p>
+            <p class="field-note">
+              현재가 기준이며 추가 매수 수수료를 반영합니다. 기존 매입단가는
+              입력값을 그대로 사용하며, 매도 수수료·세금은 제외합니다.
+            </p>
           </div>
-          <button id="copy-result" class="copy-button" type="button">
+          <button id="copy-result" class="copy-button" type="button" disabled>
             <span aria-hidden="true">▣</span> 계산 결과 복사
           </button>
           <p id="copy-status" class="copy-status" role="status"></p>
@@ -303,9 +395,13 @@
         <span class="info-symbol" aria-hidden="true">i</span>
         <div>
           <h2>계산은 이렇게 해요</h2>
-          <p>새 평균단가 = (기존 매입금액 + 추가 매수금액) ÷ 총 보유 수량</p>
+          <p>
+            새 평균단가 = (기존 매입금액 + 추가 매수금액 + 추가 매수 수수료) ÷
+            총 보유 수량
+          </p>
           <p class="muted">
-            1주 단위 · 원화 기준 · 수수료와 세금 제외 · 실시간 시세 연동 없음
+            1주 단위 · 원화 기준 · 추가 매수 수수료 포함 · 매도 비용 제외 · 시세
+            직접 입력
           </p>
         </div>
       </aside>

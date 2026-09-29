@@ -21,11 +21,21 @@
       ? "—"
       : `${value < 0 ? "−" : value > 0 ? "+" : ""}${number(Math.abs(value))}${suffix}`;
   let latestResult = null;
+  const broker = $("broker");
+  for (const preset of BrokerPresets) {
+    const option = document.createElement("option");
+    option.value = preset.id;
+    option.textContent = preset.label;
+    broker.append(option);
+  }
   const resultIds = [
     "new-average",
     "old-average",
     "average-percent",
     "purchase-cost",
+    "purchase-fee",
+    "purchase-total",
+    "price-average",
     "remaining-budget",
     "budget-percent",
     "before-quantity",
@@ -45,6 +55,7 @@
       ),
       useMarketPrice: $("use-market-price").checked,
       useMaxQuantity: $("use-max-quantity").checked,
+      feeRounding: $("fee-rounding").value,
     };
   }
   function text(id, value) {
@@ -67,7 +78,7 @@
   function invalid(error) {
     latestResult = null;
     resultIds.forEach((id) => text(id, "—"));
-    text("average-change", "입력값을 확인하면 결과가 바로 표시돼요.");
+    text("average-change", "보유 현황과 매수 계획을 입력해 주세요.");
     $("average-change").classList.remove("increase");
     text("purchase-description", "");
     text("remaining-label", "남는 예산");
@@ -77,17 +88,46 @@
     ["before-pnl", "after-pnl", "before-return", "after-return"].forEach((id) =>
       color(id, 0),
     );
-    if (error instanceof StockCalculator.InputError) {
+    if (!error || (fields[error.field] && !fields[error.field].value.trim())) {
+      notice("");
+    } else if (error instanceof StockCalculator.InputError) {
       const input = fields[error.field];
       if (input) {
         input.setAttribute("aria-invalid", "true");
         text(`${input.id}-error`, error.message);
+        if (input.closest("details")) input.closest("details").open = true;
       }
       notice(error.message);
     } else {
       notice("계산을 완료하지 못했어요. 입력값을 다시 확인해 주세요.");
     }
   }
+
+  function showFeeSource() {
+    const preset = BrokerPresets.find((item) => item.id === broker.value);
+    const link = $("fee-source");
+    link.hidden = !preset?.source;
+    if (preset?.source) link.href = preset.source;
+    else link.removeAttribute("href");
+    text(
+      "broker-note",
+      preset?.source
+        ? "온라인 일반 요율 참고 · 2026.09.29 확인. 계좌·이벤트별 실제 요율이 다르면 직접 수정해 주세요."
+        : broker.value === "none"
+          ? "매수 수수료를 0원으로 계산해요."
+          : "내 계좌에 적용되는 총 수수료율을 입력해 주세요. 최소·정액 수수료는 상세 설정에서 변경할 수 있어요.",
+    );
+  }
+
+  broker.addEventListener("change", () => {
+    const preset = BrokerPresets.find((item) => item.id === broker.value);
+    fields.feeRate.value = preset?.rate ?? "";
+    fields.minimumFee.value = preset?.minimum ?? "";
+    fields.fixedFee.value = preset?.fixed ?? "";
+    $("fee-rounding").value = preset?.rounding ?? "ceil-won";
+    showFeeSource();
+    update();
+  });
 
   function update() {
     clearErrors();
@@ -105,20 +145,28 @@
         input.budget,
         input.marketPrice,
         "marketPrice",
+        input,
       );
       const callout = $("afford-text");
-      callout.replaceChildren(document.createTextNode("현재가로 최대 "));
+      callout.replaceChildren(
+        document.createTextNode("수수료 포함, 현재가로 최대 "),
+      );
       const strong = document.createElement("strong");
       strong.textContent = `${capacity.toLocaleString("ko-KR")}주`;
       callout.append(strong, document.createTextNode(" 살 수 있어요."));
     } catch {
-      text("afford-text", "예산과 현재가를 입력하면 매수 가능 수량이 나와요.");
+      text(
+        "afford-text",
+        "예산·현재가·수수료를 입력하면 매수 가능 수량이 나와요.",
+      );
     }
     if (input.useMaxQuantity) {
       try {
         fields.buyQuantity.value = StockCalculator.capacity(
           input.budget,
           input.buyPrice,
+          "buyPrice",
+          input,
         ).toLocaleString("ko-KR");
       } catch {
         fields.buyQuantity.value = "";
@@ -132,6 +180,10 @@
       button.classList.toggle("selected", active);
       button.setAttribute("aria-pressed", String(active));
     });
+    if (!broker.value) {
+      invalid();
+      return;
+    }
     try {
       const result = StockCalculator.calculate(input);
       latestResult = result;
@@ -158,6 +210,9 @@
           `기존보다 ${won(Math.abs(result.averageChange))} ${result.averageChange < 0 ? "낮아져요" : "높아져요"}`,
         );
       text("purchase-cost", won(result.purchaseCost));
+      text("purchase-fee", won(result.purchaseFee));
+      text("purchase-total", won(result.purchaseTotal));
+      text("price-average", won(result.priceAverage));
       text("remaining-label", result.overBudget ? "초과한 예산" : "남는 예산");
       text("remaining-budget", won(Math.abs(result.remainingBudget)));
       text(
@@ -189,10 +244,10 @@
       ["after-pnl", "after-return"].forEach((id) => color(id, result.afterPnl));
       if (result.overBudget)
         notice(
-          `예산보다 ${won(-result.remainingBudget)} 초과한 계획이에요. 이 단가에서 예산 내 최대 수량은 ${shares(result.maxBuyQuantity)}입니다.`,
+          `수수료를 포함하면 예산보다 ${won(-result.remainingBudget)} 초과해요. 이 단가에서 예산 내 최대 수량은 ${shares(result.maxBuyQuantity)}입니다.`,
         );
       else if (result.buyQuantity === 0 && result.maxBuyQuantity === 0)
-        notice("현재 예산으로는 설정한 매수 단가에 1주를 살 수 없어요.");
+        notice("현재 예산으로는 매수 수수료를 포함해 1주를 살 수 없어요.");
       else notice("");
     } catch (error) {
       invalid(error);
@@ -201,6 +256,11 @@
 
   function formatField(input) {
     try {
+      if (input.name === "feeRate") {
+        const rate = StockCalculator.parseRate(input.value);
+        input.value = String(Number(rate) / 10000000);
+        return;
+      }
       const quantity = input.name.toLowerCase().includes("quantity");
       const parsed = StockCalculator.parse(input.value, input.name, quantity);
       input.value = number(Number(parsed) / (quantity ? 1 : 100));
@@ -211,13 +271,24 @@
 
   form.addEventListener("submit", (event) => event.preventDefault());
   Object.values(fields).forEach((input) => {
-    input.addEventListener("input", update);
+    input.addEventListener("input", () => {
+      if (["feeRate", "minimumFee", "fixedFee"].includes(input.name)) {
+        broker.value = "custom";
+        // Initialize hidden optional amounts only after the user starts a fee plan.
+        if (input.name === "feeRate") {
+          if (!fields.minimumFee.value) fields.minimumFee.value = "0";
+          if (!fields.fixedFee.value) fields.fixedFee.value = "0";
+        }
+        showFeeSource();
+      }
+      update();
+    });
     input.addEventListener("blur", () => {
       formatField(input);
       update();
     });
   });
-  ["use-market-price", "use-max-quantity"].forEach((id) =>
+  ["use-market-price", "use-max-quantity", "fee-rounding"].forEach((id) =>
     $(id).addEventListener("change", update),
   );
   document.querySelectorAll("[data-budget]").forEach((button) =>
@@ -228,6 +299,8 @@
   );
   $("reset").addEventListener("click", () => {
     form.reset();
+    document.querySelector(".fee-advanced").open = false;
+    showFeeSource();
     update();
     fields.heldQuantity.focus();
   });
@@ -241,11 +314,17 @@
       `현재가: ${won(r.marketPrice)}`,
       `매수 예산: ${won(r.budget)}`,
       `추가 매수: ${shares(r.buyQuantity)} × ${won(r.buyPrice)} = ${won(r.purchaseCost)}`,
+      `수수료 설정: ${broker.options[broker.selectedIndex].textContent} / ${fields.feeRate.value}%`,
+      `예상 매수 수수료: ${won(r.purchaseFee)}`,
+      `최소 수수료: ${fields.minimumFee.value}원 / 건당 정액 수수료: ${fields.fixedFee.value}원`,
+      `수수료 포함 총 사용액: ${won(r.purchaseTotal)}`,
       `${r.overBudget ? "예산 초과" : "남는 예산"}: ${won(Math.abs(r.remainingBudget))}`,
-      `매수 후: ${shares(r.totalQuantity)} / 평균 ${won(r.average)}`,
-      `총 매입금액: ${won(r.totalCost)}`,
+      `매수 후: ${shares(r.totalQuantity)} / 수수료 포함 평균 ${won(r.average)}`,
+      `추가 수수료 제외 평균단가: ${won(r.priceAverage)}`,
+      `총 투입금액: ${won(r.totalCost)}`,
       `현재가 기준 평가손익: ${signed(r.afterPnl, "원")} (${signed(r.afterReturn, "%")})`,
-      "1주 단위 · 수수료 및 세금 제외 · 직접 입력한 시세 기준",
+      `수수료 계산 단위: ${$("fee-rounding").selectedOptions[0].textContent}`,
+      "1주 단위 · 추가 매수 수수료 포함 · 매도 수수료·세금 제외 · 직접 입력한 시세 기준",
     ].join("\n");
     try {
       let copied = false;
