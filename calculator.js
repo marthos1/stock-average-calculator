@@ -45,22 +45,16 @@
 
   // Percentage precision: seven decimal places (e.g. 0.0036396%).
   const RATE_SCALE = 1000000000n;
-  function parseRate(value) {
+  function parseRate(value, field = "feeRate") {
     const raw = String(value ?? "").trim();
-    if (!raw) throw new InputError("feeRate", "매수 수수료율을 입력해 주세요.");
+    if (!raw) throw new InputError(field, "요율을 입력해 주세요.");
     if (raw.length > 20 || !/^\d+(?:\.\d{1,7})?$/.test(raw)) {
-      throw new InputError(
-        "feeRate",
-        "수수료율은 소수 일곱째 자리까지 입력해 주세요.",
-      );
+      throw new InputError(field, "요율은 소수 일곱째 자리까지 입력해 주세요.");
     }
     const [whole, decimal = ""] = raw.split(".");
     const rate = BigInt(whole) * 10000000n + BigInt(decimal.padEnd(7, "0"));
     if (rate > RATE_SCALE)
-      throw new InputError(
-        "feeRate",
-        "수수료율은 0~100% 사이로 입력해 주세요.",
-      );
+      throw new InputError(field, "요율은 0~100% 사이로 입력해 주세요.");
     return rate;
   }
 
@@ -98,39 +92,12 @@
     return rounded < fees.minimum ? fees.minimum : rounded;
   }
 
-  function budgetMode(input) {
-    const mode = input.budgetMode ?? "principal";
-    if (!["principal", "cash"].includes(mode))
-      throw new InputError("budget", "예산 기준을 선택해 주세요.");
-    return mode;
-  }
-
-  // A purchase plan uses principal. Only an explicit cash limit reserves fees.
-  function affordableQuantity(funds, unitPrice, fees, mode) {
-    if (mode === "principal") return funds / unitPrice;
-    let low = 0n;
-    let high = funds / unitPrice;
-    while (low < high) {
-      const middle = (low + high + 1n) / 2n;
-      const principal = middle * unitPrice;
-      if (principal + feeForCost(principal, fees) <= funds) low = middle;
-      else high = middle - 1n;
-    }
-    return low;
-  }
-
-  function capacity(budget, price, priceField = "buyPrice", feeInput = {}) {
+  function capacity(budget, price, priceField = "buyPrice") {
     const funds = parse(budget, "budget");
     const unitPrice = parse(price, priceField);
     if (unitPrice === 0n)
       throw new InputError(priceField, "단가는 0원보다 커야 해요.");
-    const mode = budgetMode(feeInput);
-    return affordableQuantity(
-      funds,
-      unitPrice,
-      mode === "cash" ? feeSettings(feeInput) : null,
-      mode,
-    );
+    return funds / unitPrice;
   }
 
   function calculate(input) {
@@ -142,7 +109,11 @@
       ? marketPrice
       : parse(input.buyPrice, "buyPrice");
     const fees = feeSettings(input);
-    const mode = budgetMode(input);
+    const sellFees = {
+      ...fees,
+      rate: parseRate(input.sellFeeRate ?? input.feeRate ?? "0", "sellFeeRate"),
+    };
+    const taxRate = parseRate(input.sellTaxRate ?? "0", "sellTaxRate");
     if (heldQuantity > 0n && heldPrice === 0n)
       throw new InputError(
         "heldPrice",
@@ -152,7 +123,7 @@
       throw new InputError("marketPrice", "현재가는 0원보다 커야 해요.");
     if (buyPrice === 0n)
       throw new InputError("buyPrice", "매수 단가는 0원보다 커야 해요.");
-    const maxBuyQuantity = affordableQuantity(budget, buyPrice, fees, mode);
+    const maxBuyQuantity = budget / buyPrice;
     const buyQuantity = input.useMaxQuantity
       ? maxBuyQuantity
       : parse(input.buyQuantity, "buyQuantity", true);
@@ -165,14 +136,36 @@
     const purchaseCost = buyQuantity * buyPrice;
     const purchaseFee = feeForCost(purchaseCost, fees);
     const purchaseTotal = purchaseCost + purchaseFee;
-    const budgetSpend = mode === "cash" ? purchaseTotal : purchaseCost;
     const totalPrincipal = heldCost + purchaseCost;
-    const totalCost = heldCost + purchaseTotal;
+    const heldBuyFee =
+      heldQuantity === 0n
+        ? 0n
+        : String(input.heldBuyFee ?? "").trim() === ""
+          ? feeForCost(heldCost, fees)
+          : parse(input.heldBuyFee, "heldBuyFee");
+    const totalBuyFees = heldBuyFee + purchaseFee;
+    const totalCost = totalPrincipal + totalBuyFees;
     const totalQuantity = heldQuantity + buyQuantity;
     const beforeValue = heldQuantity * marketPrice;
     const afterValue = totalQuantity * marketPrice;
+    const beforeSellFee = feeForCost(beforeValue, sellFees);
+    const afterSellFee = feeForCost(afterValue, sellFees);
+    // Whole-won ceiling estimates, independent of brokerage commission rounding.
+    const taxFees = {
+      rate: taxRate,
+      minimum: 0n,
+      fixed: 0n,
+      rounding: "ceil-won",
+    };
+    const beforeTax = feeForCost(beforeValue, taxFees);
+    const afterTax = feeForCost(afterValue, taxFees);
     if (
-      [totalCost, beforeValue, afterValue].some((value) => value > MAX_SAFE)
+      [
+        totalCost + afterSellFee + afterTax,
+        heldCost + heldBuyFee + beforeSellFee + beforeTax,
+        beforeValue,
+        afterValue,
+      ].some((value) => value > MAX_SAFE)
     ) {
       throw new InputError(
         "heldQuantity",
@@ -180,8 +173,9 @@
       );
     }
     const money = (value) => Number(value) / 100;
-    const beforePnl = beforeValue - heldCost;
-    const afterPnl = afterValue - totalCost;
+    const beforePnl =
+      beforeValue - heldCost - heldBuyFee - beforeSellFee - beforeTax;
+    const afterPnl = afterValue - totalCost - afterSellFee - afterTax;
     const average =
       totalQuantity > 0n ? money(totalPrincipal) / Number(totalQuantity) : null;
     const averageChange =
@@ -190,16 +184,20 @@
       heldQuantity: Number(heldQuantity),
       heldPrice: money(heldPrice),
       budget: money(budget),
-      budgetMode: mode,
-      budgetSpend: money(budgetSpend),
       marketPrice: money(marketPrice),
       buyPrice: money(buyPrice),
       buyQuantity: Number(buyQuantity),
-      currentPriceCapacity: Number(
-        affordableQuantity(budget, marketPrice, fees, mode),
-      ),
+      currentPriceCapacity: Number(budget / marketPrice),
       maxBuyQuantity: Number(maxBuyQuantity),
       heldCost: money(heldCost),
+      heldBuyFee: money(heldBuyFee),
+      totalBuyFees: money(totalBuyFees),
+      beforeValue: money(beforeValue),
+      afterValue: money(afterValue),
+      beforeSellFee: money(beforeSellFee),
+      afterSellFee: money(afterSellFee),
+      beforeTax: money(beforeTax),
+      afterTax: money(afterTax),
       purchaseCost: money(purchaseCost),
       purchaseFee: money(purchaseFee),
       purchaseTotal: money(purchaseTotal),
@@ -209,8 +207,8 @@
       totalPrincipal: money(totalPrincipal),
       totalCost: money(totalCost),
       totalQuantity: Number(totalQuantity),
-      remainingBudget: money(budget - budgetSpend),
-      overBudget: budgetSpend > budget,
+      remainingBudget: money(budget - purchaseCost),
+      overBudget: purchaseCost > budget,
       average,
       averageChange,
       averageChangePercent:
@@ -219,8 +217,8 @@
           : (averageChange / money(heldPrice)) * 100,
       budgetUsage:
         budget > 0n
-          ? (Number(budgetSpend) / Number(budget)) * 100
-          : budgetSpend > 0n
+          ? (Number(purchaseCost) / Number(budget)) * 100
+          : purchaseCost > 0n
             ? null
             : 0,
       beforePnl: money(beforePnl),

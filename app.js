@@ -21,6 +21,7 @@
       ? "—"
       : `${value < 0 ? "−" : value > 0 ? "+" : ""}${number(Math.abs(value))}${suffix}`;
   let latestResult = null;
+  let sellFeeEdited = false;
   const broker = $("broker");
   for (const preset of BrokerPresets) {
     const option = document.createElement("option");
@@ -42,6 +43,14 @@
     "after-quantity",
     "before-cost",
     "after-cost",
+    "before-value",
+    "after-value",
+    "before-buy-fee",
+    "after-buy-fee",
+    "before-sell-fee",
+    "after-sell-fee",
+    "before-tax",
+    "after-tax",
     "before-pnl",
     "after-pnl",
     "before-return",
@@ -56,7 +65,6 @@
       useMarketPrice: $("use-market-price").checked,
       useMaxQuantity: $("use-max-quantity").checked,
       feeRounding: $("fee-rounding").value,
-      budgetMode: $("budget-mode").value,
     };
   }
   function text(id, value) {
@@ -129,6 +137,15 @@
     fields.feeRate.value = preset?.rate ?? "";
     fields.minimumFee.value = preset?.minimum ?? "";
     fields.fixedFee.value = preset?.fixed ?? "";
+    fields.sellFeeRate.value = preset?.rate ?? "";
+    sellFeeEdited = false;
+    if (!fields.sellTaxRate.value && preset)
+      fields.sellTaxRate.value =
+        $("tax-product").value === "stock"
+          ? "0.2"
+          : $("tax-product").value === "etp"
+            ? "0"
+            : "";
     $("fee-rounding").value = preset?.rounding ?? "ceil-won";
     showFeeSource();
     update();
@@ -138,19 +155,6 @@
     clearErrors();
     text("copy-status", "");
     const input = read();
-    const cashLimit = input.budgetMode === "cash";
-    text(
-      "budget-mode-note",
-      cashLimit
-        ? "매수금액과 수수료의 합계가 현금 한도를 넘지 않도록 수량을 계산해요."
-        : "수수료는 매수 수량을 줄이지 않고 예상 손익에서 차감해요.",
-    );
-    text(
-      "settlement-note",
-      cashLimit
-        ? "수수료를 포함한 결제 예상액으로 예산 사용률과 잔액을 계산해요."
-        : "수수료는 별도 비용이며, 매수 예산의 초과로 표시하지 않아요. 결제 예상액은 계좌에서 나갈 금액이에요.",
-    );
     fields.buyPrice.readOnly = input.useMarketPrice;
     fields.buyQuantity.readOnly = input.useMaxQuantity;
     text("auto-badge", input.useMaxQuantity ? "자동" : "직접 입력");
@@ -163,15 +167,10 @@
         input.budget,
         input.marketPrice,
         "marketPrice",
-        input,
       );
       const callout = $("afford-text");
       callout.replaceChildren(
-        document.createTextNode(
-          cashLimit
-            ? "수수료까지 포함해, 현재가로 최대 "
-            : "매수 예산으로 현재가 기준 최대 ",
-        ),
+        document.createTextNode("매수 예산으로 현재가 기준 최대 "),
       );
       const strong = document.createElement("strong");
       strong.textContent = `${capacity.toLocaleString("ko-KR")}주`;
@@ -179,9 +178,7 @@
     } catch {
       text(
         "afford-text",
-        cashLimit
-          ? "예산·현재가·수수료를 입력하면 예산에 맞는 수량이 나와요."
-          : "예산과 현재가를 입력하면 예산에 맞는 수량이 나와요.",
+        "예산과 현재가를 입력하면 예산에 맞는 수량이 나와요.",
       );
     }
     if (input.useMaxQuantity) {
@@ -190,7 +187,6 @@
           input.budget,
           input.buyPrice,
           "buyPrice",
-          input,
         ).toLocaleString("ko-KR");
       } catch {
         fields.buyQuantity.value = "";
@@ -258,6 +254,14 @@
       text("after-quantity", shares(result.totalQuantity));
       text("before-cost", won(result.heldCost));
       text("after-cost", won(result.totalPrincipal));
+      text("before-value", won(result.beforeValue));
+      text("after-value", won(result.afterValue));
+      text("before-buy-fee", won(result.heldBuyFee));
+      text("after-buy-fee", won(result.totalBuyFees));
+      text("before-sell-fee", won(result.beforeSellFee));
+      text("after-sell-fee", won(result.afterSellFee));
+      text("before-tax", won(result.beforeTax));
+      text("after-tax", won(result.afterTax));
       text("before-pnl", signed(result.beforePnl, "원"));
       text("after-pnl", signed(result.afterPnl, "원"));
       text("before-return", signed(result.beforeReturn, "%"));
@@ -268,14 +272,10 @@
       ["after-pnl", "after-return"].forEach((id) => color(id, result.afterPnl));
       if (result.overBudget)
         notice(
-          `${cashLimit ? "수수료 포함 결제액이" : "주식 매수금액이"} 예산보다 ${won(-result.remainingBudget)} 초과해요. 이 단가에서 예산 내 최대 수량은 ${shares(result.maxBuyQuantity)}입니다.`,
+          `주식 매수금액이 예산보다 ${won(-result.remainingBudget)} 초과해요. 이 단가에서 예산 내 최대 수량은 ${shares(result.maxBuyQuantity)}입니다.`,
         );
       else if (result.buyQuantity === 0 && result.maxBuyQuantity === 0)
-        notice(
-          cashLimit
-            ? "현재 현금 한도로는 수수료를 포함해 1주를 살 수 없어요."
-            : "현재 매수 예산으로는 1주를 살 수 없어요.",
-        );
+        notice("현재 매수 예산으로는 1주를 살 수 없어요.");
       else notice("");
     } catch (error) {
       invalid(error);
@@ -284,8 +284,8 @@
 
   function formatField(input) {
     try {
-      if (input.name === "feeRate") {
-        const rate = StockCalculator.parseRate(input.value);
+      if (["feeRate", "sellFeeRate", "sellTaxRate"].includes(input.name)) {
+        const rate = StockCalculator.parseRate(input.value, input.name);
         input.value = String(Number(rate) / 10000000);
         return;
       }
@@ -306,9 +306,15 @@
         if (input.name === "feeRate") {
           if (!fields.minimumFee.value) fields.minimumFee.value = "0";
           if (!fields.fixedFee.value) fields.fixedFee.value = "0";
+          if (!sellFeeEdited) fields.sellFeeRate.value = input.value;
+          if (!fields.sellTaxRate.value && $("tax-product").value !== "custom")
+            fields.sellTaxRate.value =
+              $("tax-product").value === "stock" ? "0.2" : "0";
         }
         showFeeSource();
       }
+      if (input.name === "sellFeeRate") sellFeeEdited = true;
+      if (input.name === "sellTaxRate") $("tax-product").value = "custom";
       update();
     });
     input.addEventListener("blur", () => {
@@ -316,12 +322,16 @@
       update();
     });
   });
-  [
-    "use-market-price",
-    "use-max-quantity",
-    "fee-rounding",
-    "budget-mode",
-  ].forEach((id) => $(id).addEventListener("change", update));
+  ["use-market-price", "use-max-quantity", "fee-rounding"].forEach((id) =>
+    $(id).addEventListener("change", update),
+  );
+  $("tax-product").addEventListener("change", () => {
+    const product = $("tax-product").value;
+    fields.sellTaxRate.value =
+      product === "stock" ? "0.2" : product === "etp" ? "0" : "";
+    if (product === "custom") $("pnl-settings").open = true;
+    update();
+  });
   document.querySelectorAll("[data-budget]").forEach((button) =>
     button.addEventListener("click", () => {
       fields.budget.value = number(Number(button.dataset.budget));
@@ -330,7 +340,10 @@
   );
   $("reset").addEventListener("click", () => {
     form.reset();
-    document.querySelector(".fee-advanced").open = false;
+    sellFeeEdited = false;
+    document
+      .querySelectorAll(".fee-advanced")
+      .forEach((detail) => (detail.open = false));
     $("order-guide").open = false;
     showFeeSource();
     update();
@@ -345,7 +358,6 @@
       `현재 보유: ${shares(r.heldQuantity)} / 평균 ${won(r.heldPrice)}`,
       `현재가: ${won(r.marketPrice)}`,
       `매수 예산: ${won(r.budget)}`,
-      `예산 기준: ${$("budget-mode").selectedOptions[0].textContent}`,
       `추가 매수: ${shares(r.buyQuantity)} × ${won(r.buyPrice)} = ${won(r.purchaseCost)}`,
       `수수료 설정: ${broker.options[broker.selectedIndex].textContent} / ${fields.feeRate.value}%`,
       `예상 매수 수수료: ${won(r.purchaseFee)}`,
@@ -353,11 +365,15 @@
       `수수료 포함 결제 예상액: ${won(r.purchaseTotal)}`,
       `${r.overBudget ? "예산 초과" : "남는 예산"}: ${won(Math.abs(r.remainingBudget))}`,
       `매수 후: ${shares(r.totalQuantity)} / 평균단가 ${won(r.average)}`,
-      `이번 수수료를 반영한 평균원가: ${won(r.costAverage)}`,
+      `매수 수수료를 반영한 평균원가: ${won(r.costAverage)}`,
       `총 매입금액: ${won(r.totalPrincipal)}`,
-      `현재가 기준 예상 손익 (이번 매수 수수료 차감): ${signed(r.afterPnl, "원")} (${signed(r.afterReturn, "%")})`,
+      `매수 수수료 합계: ${won(r.totalBuyFees)} (기존 ${won(r.heldBuyFee)} + 이번 ${won(r.purchaseFee)})`,
+      `예상 매도 수수료: ${won(r.afterSellFee)} / 매도세금: ${won(r.afterTax)}`,
+      `매수 전 손익·수익률: ${signed(r.beforePnl, "원")} (${signed(r.beforeReturn, "%")})`,
+      `매수 후 손익·수익률: ${signed(r.afterPnl, "원")} (${signed(r.afterReturn, "%")})`,
+      `매도 수수료율: ${fields.sellFeeRate.value}% / 매도세율: ${fields.sellTaxRate.value}%`,
       `수수료 계산 단위: ${$("fee-rounding").selectedOptions[0].textContent}`,
-      "개인 매수 계획이며 계좌 주문가능수량과 다를 수 있음 · 기존 매수 비용 및 매도 수수료·세금 제외 · 직접 입력한 시세 기준",
+      "현재가로 전량 매도할 때의 비용 반영 예상 손익 · 기존 매수 수수료 미입력 시 현재 요율로 추정 · 증권사 우대·절사·화면 설정에 따라 차이 가능",
     ].join("\n");
     try {
       let copied = false;

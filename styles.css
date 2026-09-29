@@ -933,9 +933,6 @@ legend + * {
 .fee-source[hidden] {
   display: none;
 }
-.budget-mode-field {
-  margin-bottom: 18px;
-}
 .fee-advanced,
 .order-guide {
   margin-top: 15px;

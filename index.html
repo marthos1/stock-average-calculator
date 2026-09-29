@@ -122,16 +122,6 @@
                 ><button type="button" data-budget="1000000">100만</button
                 ><button type="button" data-budget="3000000">300만</button>
               </div>
-              <div class="field budget-mode-field">
-                <label for="budget-mode">예산 기준</label>
-                <select id="budget-mode" aria-describedby="budget-mode-note">
-                  <option value="principal">주식 매수금액 기준</option>
-                  <option value="cash">수수료까지 포함한 현금 한도</option>
-                </select>
-                <p class="field-note" id="budget-mode-note">
-                  수수료는 매수 수량을 줄이지 않고 예상 손익에서 차감해요.
-                </p>
-              </div>
               <div class="field">
                 <label for="market-price"
                   >주식 종목 현재가
@@ -252,6 +242,70 @@
                 기본은 1원 미만 올림으로 예상 비용을 계산해요. 실제 계좌의 절사
                 방식은 상세 설정에서 바꿀 수 있어요.
               </p>
+              <div class="field fee-rate-field">
+                <label for="tax-product">종목 구분 · 매도세금</label>
+                <select id="tax-product">
+                  <option value="stock">코스피·코스닥 주식 · 0.20%</option>
+                  <option value="etp">ETF·ETN · 증권거래세 0%</option>
+                  <option value="custom">매도세율 직접 입력</option>
+                </select>
+              </div>
+              <details class="fee-advanced" id="pnl-settings">
+                <summary>손익 계산 상세 설정</summary>
+                <div class="field-grid">
+                  <div class="field">
+                    <label for="sell-fee-rate">예상 매도 수수료율</label>
+                    <div class="input-wrap">
+                      <input
+                        id="sell-fee-rate"
+                        name="sellFeeRate"
+                        type="text"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        aria-describedby="sell-fee-rate-error"
+                      /><span>%</span>
+                    </div>
+                    <p class="field-error" id="sell-fee-rate-error"></p>
+                  </div>
+                  <div class="field">
+                    <label for="sell-tax-rate">예상 매도세율</label>
+                    <div class="input-wrap">
+                      <input
+                        id="sell-tax-rate"
+                        name="sellTaxRate"
+                        type="text"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        aria-describedby="sell-tax-rate-error"
+                      /><span>%</span>
+                    </div>
+                    <p class="field-error" id="sell-tax-rate-error"></p>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="held-buy-fee"
+                    >기존 매수 수수료
+                    <span class="label-hint">선택 입력</span></label
+                  >
+                  <div class="input-wrap">
+                    <input
+                      id="held-buy-fee"
+                      name="heldBuyFee"
+                      type="text"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      placeholder="비워두면 현재 매수 요율로 추정"
+                      aria-describedby="held-buy-fee-error"
+                    /><span>원</span>
+                  </div>
+                  <p class="field-error" id="held-buy-fee-error"></p>
+                </div>
+              </details>
+              <p class="field-note">
+                매수·매도 수수료와 매도세금을 손익에 반영해요. 일반주식은 2026년
+                코스피·코스닥 합산 세율 0.20%를 사용해요. ETF·ETN의 배당소득세는
+                계산하지 않아요.
+              </p>
             </fieldset>
             <fieldset class="purchase-fields">
               <legend><span class="step">04</span> 추가 매수 설정</legend>
@@ -358,12 +412,13 @@
               <span>수수료 포함 결제 예상액</span
               ><strong id="purchase-total">—</strong>
             </div>
-            <p class="field-note" id="settlement-note">
-              수수료는 별도 비용이며, 매수 예산의 초과로 표시하지 않아요.
+            <p class="field-note">
+              수수료는 예상 손익에서 차감하며, 매수 수량과 남는 예산에는 영향을
+              주지 않아요.
             </p>
           </div>
           <div class="price-average-line">
-            <span>이번 수수료를 반영한 평균원가</span
+            <span>매수 수수료를 반영한 평균원가</span
             ><strong id="cost-average">—</strong>
           </div>
           <div class="panel details">
@@ -391,21 +446,42 @@
                   <td id="after-cost">—</td>
                 </tr>
                 <tr>
+                  <th scope="row">현재가 평가금액</th>
+                  <td id="before-value">—</td>
+                  <td id="after-value">—</td>
+                </tr>
+                <tr class="cost-row">
+                  <th scope="row">매수 수수료</th>
+                  <td id="before-buy-fee">—</td>
+                  <td id="after-buy-fee">—</td>
+                </tr>
+                <tr class="cost-row">
+                  <th scope="row">예상 매도 수수료</th>
+                  <td id="before-sell-fee">—</td>
+                  <td id="after-sell-fee">—</td>
+                </tr>
+                <tr class="cost-row">
+                  <th scope="row">예상 매도세금</th>
+                  <td id="before-tax">—</td>
+                  <td id="after-tax">—</td>
+                </tr>
+                <tr>
                   <th scope="row">예상 손익</th>
                   <td id="before-pnl">—</td>
                   <td id="after-pnl">—</td>
                 </tr>
                 <tr>
-                  <th scope="row">수익률</th>
+                  <th scope="row">비용 반영 수익률</th>
                   <td id="before-return">—</td>
                   <td id="after-return">—</td>
                 </tr>
               </tbody>
             </table>
             <p class="field-note">
-              매수 후 손익에서 이번 매수 수수료를 차감합니다. 기존 매수 비용과
-              매도 수수료·세금은 제외하므로 증권사 앱의 평가손익과 다를 수
-              있어요.
+              수익률 = (평가금액 − 매입금액 − 매수·매도 수수료 − 매도세금) ÷
+              매입금액 × 100. 현재가에 전량 매도한다고 가정한 예상치예요. 기존
+              매수 수수료는 입력하지 않으면 현재 요율로 추정하며, 증권사의 우대
+              요율·절사·화면 설정에 따라 차이가 날 수 있어요.
             </p>
           </div>
           <button id="copy-result" class="copy-button" type="button" disabled>
@@ -420,8 +496,8 @@
           <h2>계산은 이렇게 해요</h2>
           <p>새 평균단가 = (기존 매입금액 + 추가 매수금액) ÷ 총 보유 수량</p>
           <p class="muted">
-            1주 단위 · 원화 기준 · 손익에 이번 매수 수수료 반영 · 매도 비용 제외
-            · 시세 직접 입력
+            1주 단위 · 원화 기준 · 손익에 매수·매도 수수료와 매도세금 반영 ·
+            시세 직접 입력
           </p>
         </div>
       </aside>
