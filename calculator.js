@@ -98,8 +98,16 @@
     return rounded < fees.minimum ? fees.minimum : rounded;
   }
 
-  // Includes minimum/fixed fees and rounding. Search the maximum feasible quantity.
-  function affordableQuantity(funds, unitPrice, fees) {
+  function budgetMode(input) {
+    const mode = input.budgetMode ?? "principal";
+    if (!["principal", "cash"].includes(mode))
+      throw new InputError("budget", "예산 기준을 선택해 주세요.");
+    return mode;
+  }
+
+  // A purchase plan uses principal. Only an explicit cash limit reserves fees.
+  function affordableQuantity(funds, unitPrice, fees, mode) {
+    if (mode === "principal") return funds / unitPrice;
     let low = 0n;
     let high = funds / unitPrice;
     while (low < high) {
@@ -116,7 +124,13 @@
     const unitPrice = parse(price, priceField);
     if (unitPrice === 0n)
       throw new InputError(priceField, "단가는 0원보다 커야 해요.");
-    return affordableQuantity(funds, unitPrice, feeSettings(feeInput));
+    const mode = budgetMode(feeInput);
+    return affordableQuantity(
+      funds,
+      unitPrice,
+      mode === "cash" ? feeSettings(feeInput) : null,
+      mode,
+    );
   }
 
   function calculate(input) {
@@ -128,6 +142,7 @@
       ? marketPrice
       : parse(input.buyPrice, "buyPrice");
     const fees = feeSettings(input);
+    const mode = budgetMode(input);
     if (heldQuantity > 0n && heldPrice === 0n)
       throw new InputError(
         "heldPrice",
@@ -137,7 +152,7 @@
       throw new InputError("marketPrice", "현재가는 0원보다 커야 해요.");
     if (buyPrice === 0n)
       throw new InputError("buyPrice", "매수 단가는 0원보다 커야 해요.");
-    const maxBuyQuantity = affordableQuantity(budget, buyPrice, fees);
+    const maxBuyQuantity = affordableQuantity(budget, buyPrice, fees, mode);
     const buyQuantity = input.useMaxQuantity
       ? maxBuyQuantity
       : parse(input.buyQuantity, "buyQuantity", true);
@@ -150,6 +165,8 @@
     const purchaseCost = buyQuantity * buyPrice;
     const purchaseFee = feeForCost(purchaseCost, fees);
     const purchaseTotal = purchaseCost + purchaseFee;
+    const budgetSpend = mode === "cash" ? purchaseTotal : purchaseCost;
+    const totalPrincipal = heldCost + purchaseCost;
     const totalCost = heldCost + purchaseTotal;
     const totalQuantity = heldQuantity + buyQuantity;
     const beforeValue = heldQuantity * marketPrice;
@@ -166,18 +183,20 @@
     const beforePnl = beforeValue - heldCost;
     const afterPnl = afterValue - totalCost;
     const average =
-      totalQuantity > 0n ? money(totalCost) / Number(totalQuantity) : null;
+      totalQuantity > 0n ? money(totalPrincipal) / Number(totalQuantity) : null;
     const averageChange =
       heldQuantity > 0n && average !== null ? average - money(heldPrice) : null;
     return {
       heldQuantity: Number(heldQuantity),
       heldPrice: money(heldPrice),
       budget: money(budget),
+      budgetMode: mode,
+      budgetSpend: money(budgetSpend),
       marketPrice: money(marketPrice),
       buyPrice: money(buyPrice),
       buyQuantity: Number(buyQuantity),
       currentPriceCapacity: Number(
-        affordableQuantity(budget, marketPrice, fees),
+        affordableQuantity(budget, marketPrice, fees, mode),
       ),
       maxBuyQuantity: Number(maxBuyQuantity),
       heldCost: money(heldCost),
@@ -185,14 +204,13 @@
       purchaseFee: money(purchaseFee),
       purchaseTotal: money(purchaseTotal),
       feeRate: Number(fees.rate) / 10000000,
-      priceAverage:
-        totalQuantity > 0n
-          ? money(heldCost + purchaseCost) / Number(totalQuantity)
-          : null,
+      costAverage:
+        totalQuantity > 0n ? money(totalCost) / Number(totalQuantity) : null,
+      totalPrincipal: money(totalPrincipal),
       totalCost: money(totalCost),
       totalQuantity: Number(totalQuantity),
-      remainingBudget: money(budget - purchaseTotal),
-      overBudget: purchaseTotal > budget,
+      remainingBudget: money(budget - budgetSpend),
+      overBudget: budgetSpend > budget,
       average,
       averageChange,
       averageChangePercent:
@@ -201,8 +219,8 @@
           : (averageChange / money(heldPrice)) * 100,
       budgetUsage:
         budget > 0n
-          ? (Number(purchaseTotal) / Number(budget)) * 100
-          : purchaseTotal > 0n
+          ? (Number(budgetSpend) / Number(budget)) * 100
+          : budgetSpend > 0n
             ? null
             : 0,
       beforePnl: money(beforePnl),
@@ -210,7 +228,9 @@
       beforeReturn:
         heldCost > 0n ? (Number(beforePnl) / Number(heldCost)) * 100 : null,
       afterReturn:
-        totalCost > 0n ? (Number(afterPnl) / Number(totalCost)) * 100 : null,
+        totalPrincipal > 0n
+          ? (Number(afterPnl) / Number(totalPrincipal)) * 100
+          : null,
     };
   }
   const api = Object.freeze({

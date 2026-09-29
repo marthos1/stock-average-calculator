@@ -136,44 +136,81 @@ test("여러 예산과 단가에서 최대 수량과 잔액의 불변식", () =>
   }
 });
 
-test("키움 KRX: 수수료까지 예산에 맞는 47주, 예상 수수료 89원", () => {
+test("키움 KRX 매수 예산: 48주 유지, 수수료 90원은 손익에서 차감", () => {
   const r = calc({ feeRate: "0.015" });
+  assert.equal(r.budgetMode, "principal");
+  assert.equal(r.buyQuantity, 48);
+  assert.equal(r.currentPriceCapacity, 48);
+  assert.equal(r.purchaseCost, 600000);
+  assert.equal(r.purchaseFee, 90);
+  assert.equal(r.purchaseTotal, 600090);
+  assert.equal(r.remainingBudget, 0);
+  assert.equal(r.overBudget, false);
+  assert.equal(r.budgetUsage, 100);
+  near(r.average, 2400000 / 148);
+  near(r.costAverage, 2400090 / 148);
+  assert.equal(r.afterPnl, -550090);
+  near(r.afterReturn, (-550090 / 2400000) * 100);
+});
+test("수수료 포함 현금 한도를 명시적으로 선택하면 47주", () => {
+  const r = calc({ feeRate: "0.015", budgetMode: "cash" });
   assert.equal(r.buyQuantity, 47);
   assert.equal(r.purchaseCost, 587500);
   assert.equal(r.purchaseFee, 89);
   assert.equal(r.purchaseTotal, 587589);
   assert.equal(r.remainingBudget, 12411);
   assert.equal(r.totalCost, 2387589);
-  near(r.average, 2387589 / 147);
-  near(r.priceAverage, 2387500 / 147);
+  near(r.average, 2387500 / 147);
+  near(r.costAverage, 2387589 / 147);
   assert.equal(r.beforePnl, -550000);
   assert.equal(r.afterPnl, -550089);
   assert.equal(r.currentPriceCapacity, 47);
 });
-test("원금은 예산 이내지만 수수료 때문에 예산을 초과하는 직접 수량", () => {
+test("직접 48주 입력: 매수 예산은 초과하지 않고 현금 한도만 초과", () => {
   const r = calc({
     feeRate: "0.015",
     useMaxQuantity: false,
     buyQuantity: "48",
   });
-  assert.equal(r.overBudget, true);
+  assert.equal(r.overBudget, false);
   assert.equal(r.purchaseFee, 90);
-  assert.equal(r.remainingBudget, -90);
+  assert.equal(r.remainingBudget, 0);
+  const cash = calc({
+    feeRate: "0.015",
+    budgetMode: "cash",
+    useMaxQuantity: false,
+    buyQuantity: "48",
+  });
+  assert.equal(cash.overBudget, true);
+  assert.equal(cash.remainingBudget, -90);
+  const over = calc({
+    feeRate: "0.015",
+    useMaxQuantity: false,
+    buyQuantity: "49",
+  });
+  assert.equal(over.overBudget, true);
+  assert.equal(over.remainingBudget, -12500);
 });
 test("수수료를 포함한 정확한 예산 경계", () => {
-  const fees = { feeRate: "0.015" };
+  const fees = { feeRate: "0.015", budgetMode: "cash" };
   assert.equal(capacity("600090", "12500", "buyPrice", fees), 48n);
   assert.equal(capacity("600089.99", "12500", "buyPrice", fees), 47n);
   assert.equal(
     capacity("1000.01", "1000", "buyPrice", {
       feeRate: "0.001",
       feeRounding: "ceil-cent",
+      budgetMode: "cash",
     }),
     1n,
   );
 });
 test("최소 수수료, 정액 수수료와 거래 0주의 처리", () => {
-  const fees = { feeRate: "0", minimumFee: "1", fixedFee: "0" };
+  const fees = {
+    feeRate: "0",
+    minimumFee: "1",
+    fixedFee: "0",
+    budgetMode: "cash",
+  };
   assert.equal(capacity("1000", "1000", "buyPrice", fees), 0n);
   assert.equal(capacity("1001", "1000", "buyPrice", fees), 1n);
   assert.equal(calc({ ...fees, budget: "0" }).purchaseFee, 0);
@@ -186,6 +223,16 @@ test("최소 수수료, 정액 수수료와 거래 0주의 처리", () => {
   });
   assert.equal(fixed.purchaseFee, 2000);
   assert.equal(fixed.purchaseTotal, 14500);
+  const principal = calc({
+    ...fees,
+    budgetMode: "principal",
+    budget: "12500",
+    fixedFee: "20000",
+  });
+  assert.equal(principal.buyQuantity, 1);
+  assert.equal(principal.remainingBudget, 0);
+  assert.equal(principal.purchaseFee, 20000);
+  assert.equal(principal.overBudget, false);
 });
 test("원·10원 절사 및 소수 둘째 자리 올림", () => {
   const input = { feeRate: "0.015", useMaxQuantity: false, buyQuantity: "47" };
@@ -216,6 +263,27 @@ test("수수료율 소수 일곱 자리 보존 및 잘못된 설정 거부", () 
   for (const field of ["minimumFee", "fixedFee"])
     assert.throws(() => calc({ [field]: "-1" }), InputError);
   assert.throws(() => calc({ feeRounding: "invalid" }), InputError);
+  assert.throws(() => calc({ budgetMode: "invalid" }), InputError);
+  assert.throws(
+    () => capacity("600000", "12500", "buyPrice", { budgetMode: "invalid" }),
+    InputError,
+  );
+});
+test("주문 계획 수량은 수수료 선택 전에도 계산 가능", () => {
+  assert.equal(
+    capacity("600000", "12500", "buyPrice", {
+      feeRate: "",
+      minimumFee: "",
+      fixedFee: "",
+    }),
+    48n,
+  );
+});
+test("처음 매수 후 현재가가 그대로여도 수수료만큼 음수 손익", () => {
+  const r = calc({ heldQuantity: "0", heldPrice: "0", feeRate: "0.015" });
+  assert.equal(r.average, 12500);
+  assert.equal(r.afterPnl, -90);
+  assert.equal(r.afterReturn, -0.015);
 });
 test("모든 증권사·거래소 참고 요율에서 예산 불변식 및 최대 수량", () => {
   for (const preset of presets.filter((item) => item.rate !== "")) {
@@ -225,17 +293,26 @@ test("모든 증권사·거래소 참고 요율에서 예산 불변식 및 최�
       fixedFee: preset.fixed,
       feeRounding: preset.rounding,
     };
-    for (const budget of ["0", "1000", "600000", "1234567.89"]) {
-      const r = calc({ ...feeInput, budget });
-      assert.ok(r.remainingBudget >= 0);
-      near(r.purchaseTotal + r.remainingBudget, r.budget);
-      const next = calc({
-        ...feeInput,
-        budget,
-        useMaxQuantity: false,
-        buyQuantity: String(r.buyQuantity + 1),
-      });
-      assert.equal(next.overBudget, true, preset.id);
+    for (const budgetMode of ["principal", "cash"]) {
+      for (const budget of ["0", "1000", "600000", "1234567.89"]) {
+        const r = calc({ ...feeInput, budget, budgetMode });
+        assert.ok(r.remainingBudget >= 0);
+        near(r.budgetSpend + r.remainingBudget, r.budget);
+        if (budgetMode === "principal") {
+          assert.equal(
+            r.buyQuantity,
+            Math.floor(Number(budget) / Number(base.marketPrice)),
+          );
+        }
+        const next = calc({
+          ...feeInput,
+          budget,
+          budgetMode,
+          useMaxQuantity: false,
+          buyQuantity: String(r.buyQuantity + 1),
+        });
+        assert.equal(next.overBudget, true, preset.id);
+      }
     }
   }
 });

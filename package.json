@@ -1,6 +1,6 @@
 {
   "name": "moa-stock-average-calculator",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "원화 예산에 맞춰 추가 매수 수량과 주식 평균단가를 계산하는 오프라인 웹 계산기",
   "scripts": {

@@ -122,6 +122,16 @@
                 ><button type="button" data-budget="1000000">100만</button
                 ><button type="button" data-budget="3000000">300만</button>
               </div>
+              <div class="field budget-mode-field">
+                <label for="budget-mode">예산 기준</label>
+                <select id="budget-mode" aria-describedby="budget-mode-note">
+                  <option value="principal">주식 매수금액 기준</option>
+                  <option value="cash">수수료까지 포함한 현금 한도</option>
+                </select>
+                <p class="field-note" id="budget-mode-note">
+                  수수료는 매수 수량을 줄이지 않고 예상 손익에서 차감해요.
+                </p>
+              </div>
               <div class="field">
                 <label for="market-price"
                   >주식 종목 현재가
@@ -142,13 +152,13 @@
               <div class="afford-callout">
                 <span class="small-icon" aria-hidden="true">＋</span>
                 <p id="afford-text">
-                  예산·현재가·수수료를 입력하면 매수 가능 수량이 나와요.
+                  예산과 현재가를 입력하면 예산에 맞는 수량이 나와요.
                 </p>
               </div>
             </fieldset>
             <fieldset class="fee-fields">
               <legend>
-                <span class="step">03</span> 수수료까지 예산에 담기
+                <span class="step">03</span> 수수료를 손익에 반영하기
               </legend>
               <div class="field">
                 <label for="broker">증권사 · 거래소</label>
@@ -185,6 +195,17 @@
                 hidden
                 >공식 수수료 안내 ↗</a
               >
+              <details class="order-guide" id="order-guide" hidden>
+                <summary>이 증권사의 주문·손익 기준</summary>
+                <p class="field-note" id="order-note"></p>
+                <a
+                  id="order-source"
+                  class="fee-source"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >공식 주문 안내 ↗</a
+                >
+              </details>
               <details class="fee-advanced">
                 <summary>수수료 상세 설정</summary>
                 <div class="field-grid">
@@ -220,9 +241,7 @@
                 <div class="field">
                   <label for="fee-rounding">수수료 계산 단위</label
                   ><select id="fee-rounding">
-                    <option value="ceil-won">
-                      1원 미만 올림 (예산 확보용)
-                    </option>
+                    <option value="ceil-won">1원 미만 올림 (예상 비용)</option>
                     <option value="floor-won">1원 미만 버림</option>
                     <option value="floor-ten-won">10원 미만 버림</option>
                     <option value="ceil-cent">0.01원 미만 올림</option>
@@ -294,7 +313,7 @@
         >
           <div class="result-hero">
             <div class="result-header">
-              <h2 id="result-title">수수료 포함 예상 평균단가</h2>
+              <h2 id="result-title">매수 후 예상 평균단가</h2>
               <span class="live-badge"><span></span> 자동 계산</span>
             </div>
             <p class="average-value">
@@ -324,13 +343,6 @@
             <div class="spend-line">
               <span>추가 매수 금액</span><strong id="purchase-cost">—</strong>
             </div>
-            <div class="fee-breakdown">
-              <span>예상 매수 수수료</span><strong id="purchase-fee">—</strong>
-            </div>
-            <div class="total-spend">
-              <span>수수료 포함 총 사용액</span
-              ><strong id="purchase-total">—</strong>
-            </div>
             <div class="budget-track" aria-hidden="true">
               <div id="budget-bar"></div>
             </div>
@@ -339,10 +351,20 @@
               ><strong id="remaining-budget">—</strong>
             </div>
             <p class="budget-caption" id="purchase-description"></p>
+            <div class="fee-breakdown">
+              <span>예상 매수 수수료</span><strong id="purchase-fee">—</strong>
+            </div>
+            <div class="total-spend">
+              <span>수수료 포함 결제 예상액</span
+              ><strong id="purchase-total">—</strong>
+            </div>
+            <p class="field-note" id="settlement-note">
+              수수료는 별도 비용이며, 매수 예산의 초과로 표시하지 않아요.
+            </p>
           </div>
           <div class="price-average-line">
-            <span>추가 수수료 제외 평균단가</span
-            ><strong id="price-average">—</strong>
+            <span>이번 수수료를 반영한 평균원가</span
+            ><strong id="cost-average">—</strong>
           </div>
           <div class="panel details">
             <h2>한눈에 보는 매수 전·후</h2>
@@ -364,12 +386,12 @@
                   <td id="after-quantity">—</td>
                 </tr>
                 <tr>
-                  <th scope="row">총 투입금액</th>
+                  <th scope="row">총 매입금액</th>
                   <td id="before-cost">—</td>
                   <td id="after-cost">—</td>
                 </tr>
                 <tr>
-                  <th scope="row">평가손익</th>
+                  <th scope="row">예상 손익</th>
                   <td id="before-pnl">—</td>
                   <td id="after-pnl">—</td>
                 </tr>
@@ -381,8 +403,9 @@
               </tbody>
             </table>
             <p class="field-note">
-              현재가 기준이며 추가 매수 수수료를 반영합니다. 기존 매입단가는
-              입력값을 그대로 사용하며, 매도 수수료·세금은 제외합니다.
+              매수 후 손익에서 이번 매수 수수료를 차감합니다. 기존 매수 비용과
+              매도 수수료·세금은 제외하므로 증권사 앱의 평가손익과 다를 수
+              있어요.
             </p>
           </div>
           <button id="copy-result" class="copy-button" type="button" disabled>
@@ -395,13 +418,10 @@
         <span class="info-symbol" aria-hidden="true">i</span>
         <div>
           <h2>계산은 이렇게 해요</h2>
-          <p>
-            새 평균단가 = (기존 매입금액 + 추가 매수금액 + 추가 매수 수수료) ÷
-            총 보유 수량
-          </p>
+          <p>새 평균단가 = (기존 매입금액 + 추가 매수금액) ÷ 총 보유 수량</p>
           <p class="muted">
-            1주 단위 · 원화 기준 · 추가 매수 수수료 포함 · 매도 비용 제외 · 시세
-            직접 입력
+            1주 단위 · 원화 기준 · 손익에 이번 매수 수수료 반영 · 매도 비용 제외
+            · 시세 직접 입력
           </p>
         </div>
       </aside>

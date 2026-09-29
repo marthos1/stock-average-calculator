@@ -10,6 +10,31 @@
   const kakao = "https://www.kakaopaysec.com/guide/feeGuide/dynamicPage.do";
   const mirae =
     "https://securities.miraeasset.com/public/mw/guide/html/20191119095045.html";
+  // These references describe particular screens/products, not every account.
+  const orderGuides = {
+    kiwoom: {
+      orderNote:
+        "영웅문4 [0302]는 ‘미수불가 100%’ 조회에 수수료를 고려하고, ‘증거금100%종목’ 조회에는 고려하지 않아요. 잔고 평가손익에는 매수·매도 수수료와 매도 세금이 반영돼요. 이 계산기는 이번 매수 수수료만 손익에 반영해요.",
+      orderSource: "https://download.kiwoom.com/hero4_help_new/0302.htm",
+    },
+    toss: {
+      orderNote:
+        "미수거래 설명서의 예시는 매수 증거금에 수수료를 더해 주문가능금액을 계산해요. 일반 현금계좌 전체와 앱 손익 표시 방식까지 같은 규칙이라고 확인된 것은 아니에요.",
+      orderSource:
+        "https://home-files.tossinvest.com/files/notice/d29248f1-ee13-48ab-abec-e570a062d3a7.pdf",
+    },
+    kakao: {
+      orderNote:
+        "위탁증거금 안내는 매수 수수료를 현금증거금으로 징수한다고 설명해요. 계좌의 주문가능금액과 개인이 정한 매수 예산은 구분해야 해요. 앱 손익 표시 산식은 이 자료에서 확인되지 않아요.",
+      orderSource:
+        "https://kakaopaysec.com/etcGuide/marginnotice/dynamicPage.do",
+    },
+    mirae: {
+      orderNote:
+        "카이로스 [0657]에서 계좌·종목별 주문가능금액을 조회할 수 있어요. 공개 도움말에는 수수료 포함 여부나 앱 손익 표시 산식이 명시되지 않아 일괄 적용하지 않았어요.",
+      orderSource: "https://securities.miraeasset.com/kairos/0657.htm",
+    },
+  };
   const presets = [
     {
       id: "kiwoom-krx",
@@ -82,6 +107,7 @@
         minimum: "0",
         fixed: "0",
         rounding: "ceil-won",
+        ...orderGuides[preset.id.split("-")[0]],
         ...preset,
       }),
     ),
