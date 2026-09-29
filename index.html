@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#164d3e" />
+    <meta
+      name="description"
+      content="내 예산으로 몇 주를 더 살 수 있을까? 추가 매수 수량, 남는 예산, 매수 후 평균단가를 한눈에 계산하는 무료 물타기 계산기."
+    />
+    <title>모아 · 예산 맞춤 물타기 계산기</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="calculator.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#calculator">계산기로 바로 가기</a>
+    <header class="site-header wrap">
+      <a class="brand" href="./index.html" aria-label="모아 처음으로"
+        ><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span
+        >모아<span class="brand-caption">주식 물타기 계산기</span></a
+      >
+      <a
+        class="source-link"
+        href="https://github.com/marthos1/stock-average-calculator"
+        target="_blank"
+        rel="noopener noreferrer"
+        >오픈소스 <span aria-hidden="true">↗</span></a
+      >
+    </header>
+    <main class="wrap">
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow"><span></span> 내 예산에서 시작하는 계산</p>
+          <h1 id="page-title">얼마를 더 사면,<br />평균단가가 얼마일까?</h1>
+          <p class="intro-copy">
+            보유 주식과 매수 예산을 입력하고,<br class="mobile-break" />
+            달라지는 평균단가를 미리 확인하세요.
+          </p>
+        </div>
+        <div class="intro-art" aria-hidden="true">
+          <div class="art-grid"></div>
+          <div class="art-bar bar-one"></div>
+          <div class="art-bar bar-two"></div>
+          <div class="art-bar bar-three"></div>
+          <span class="art-line"></span><span class="art-dot"></span
+          ><span class="art-label">나에게 맞는 매수 계획</span>
+        </div>
+      </section>
+      <div class="calculator-layout" id="calculator">
+        <section class="input-panel panel" aria-labelledby="inputs-title">
+          <div class="panel-heading">
+            <h2 id="inputs-title">내 매수 계획</h2>
+            <button class="text-button" id="reset" type="button">
+              초기화 <span aria-hidden="true">↺</span>
+            </button>
+          </div>
+          <form id="calculator-form" novalidate>
+            <fieldset>
+              <legend><span class="step">01</span> 현재 보유 현황</legend>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="held-quantity">현재 보유 수량</label>
+                  <div class="input-wrap">
+                    <input
+                      id="held-quantity"
+                      name="heldQuantity"
+                      type="text"
+                      inputmode="numeric"
+                      value="100"
+                      autocomplete="off"
+                      aria-describedby="held-quantity-error"
+                    /><span>주</span>
+                  </div>
+                  <p class="field-error" id="held-quantity-error"></p>
+                </div>
+                <div class="field">
+                  <label for="held-price"
+                    >현재 매입단가 <span class="label-hint">평균</span></label
+                  >
+                  <div class="input-wrap">
+                    <input
+                      id="held-price"
+                      name="heldPrice"
+                      type="text"
+                      inputmode="decimal"
+                      value="18,000"
+                      autocomplete="off"
+                      aria-describedby="held-price-error"
+                    /><span>원</span>
+                  </div>
+                  <p class="field-error" id="held-price-error"></p>
+                </div>
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend><span class="step">02</span> 얼마를 더 살까요?</legend>
+              <div class="field budget-field">
+                <label for="budget"
+                  >물타기할 돈 <span class="label-hint">예산</span></label
+                >
+                <div class="input-wrap">
+                  <input
+                    id="budget"
+                    name="budget"
+                    type="text"
+                    inputmode="decimal"
+                    value="600,000"
+                    autocomplete="off"
+                    aria-describedby="budget-error"
+                  /><span>원</span>
+                </div>
+                <p class="field-error" id="budget-error"></p>
+              </div>
+              <div class="budget-shortcuts" aria-label="예산 빠른 선택">
+                <button type="button" data-budget="300000">30만</button
+                ><button
+                  type="button"
+                  data-budget="600000"
+                  class="selected"
+                  aria-pressed="true"
+                >
+                  60만</button
+                ><button type="button" data-budget="1000000">100만</button
+                ><button type="button" data-budget="3000000">300만</button>
+              </div>
+              <div class="field">
+                <label for="market-price"
+                  >주식 종목 현재가
+                  <span class="label-hint">직접 입력</span></label
+                >
+                <div class="input-wrap">
+                  <input
+                    id="market-price"
+                    name="marketPrice"
+                    type="text"
+                    inputmode="decimal"
+                    value="12,500"
+                    autocomplete="off"
+                    aria-describedby="market-price-error"
+                  /><span>원</span>
+                </div>
+                <p class="field-error" id="market-price-error"></p>
+              </div>
+              <div class="afford-callout">
+                <span class="small-icon" aria-hidden="true">＋</span>
+                <p id="afford-text">
+                  현재가로 최대 <strong>48주</strong> 살 수 있어요.
+                </p>
+              </div>
+            </fieldset>
+            <fieldset class="purchase-fields">
+              <legend><span class="step">03</span> 추가 매수 설정</legend>
+              <div class="purchase-options">
+                <label class="checkbox-label"
+                  ><input id="use-market-price" type="checkbox" checked />
+                  현재가로 매수</label
+                ><label class="checkbox-label"
+                  ><input id="use-max-quantity" type="checkbox" checked /> 예산
+                  내 최대 수량</label
+                >
+              </div>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="buy-quantity"
+                    >추가 매수 수량
+                    <span id="auto-badge" class="label-hint">자동</span></label
+                  >
+                  <div class="input-wrap">
+                    <input
+                      id="buy-quantity"
+                      name="buyQuantity"
+                      type="text"
+                      inputmode="numeric"
+                      readonly
+                      value="48"
+                      autocomplete="off"
+                      aria-describedby="buy-quantity-error"
+                    /><span>주</span>
+                  </div>
+                  <p class="field-error" id="buy-quantity-error"></p>
+                </div>
+                <div class="field">
+                  <label for="buy-price">추가 매수 단가</label>
+                  <div class="input-wrap">
+                    <input
+                      id="buy-price"
+                      name="buyPrice"
+                      type="text"
+                      inputmode="decimal"
+                      readonly
+                      value="12,500"
+                      autocomplete="off"
+                      aria-describedby="buy-price-error"
+                    /><span>원</span>
+                  </div>
+                  <p class="field-error" id="buy-price-error"></p>
+                </div>
+              </div>
+              <p class="field-note">
+                체크를 해제하면 수량과 매수 단가를 직접 정할 수 있어요.
+              </p>
+            </fieldset>
+          </form>
+        </section>
+        <section
+          class="results"
+          aria-labelledby="result-title"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div class="result-hero">
+            <div class="result-header">
+              <h2 id="result-title">매수 후 예상 평균단가</h2>
+              <span class="live-badge"><span></span> 자동 계산</span>
+            </div>
+            <p class="average-value">
+              <span id="new-average">16,216.22</span
+              ><span class="value-unit">원</span>
+            </p>
+            <p class="average-change" id="average-change">
+              기존보다 1,783.78원 낮아져요
+            </p>
+            <div class="average-compare">
+              <div>
+                <span>현재 평균단가</span
+                ><strong id="old-average">18,000원</strong>
+              </div>
+              <span class="compare-arrow" aria-hidden="true">→</span>
+              <div>
+                <span>평균단가 변화</span
+                ><strong id="average-percent">−9.91%</strong>
+              </div>
+            </div>
+          </div>
+          <div id="result-notice" class="result-notice" hidden></div>
+          <div class="panel budget-summary">
+            <div class="panel-heading">
+              <h2>예산 사용 계획</h2>
+              <span id="budget-percent" class="percent-tag">100%</span>
+            </div>
+            <div class="spend-line">
+              <span>추가 매수 금액</span
+              ><strong id="purchase-cost">600,000원</strong>
+            </div>
+            <div class="budget-track" aria-hidden="true">
+              <div id="budget-bar"></div>
+            </div>
+            <div class="remaining-line">
+              <span id="remaining-label">남는 예산</span
+              ><strong id="remaining-budget">0원</strong>
+            </div>
+            <p class="budget-caption" id="purchase-description">
+              12,500원 × 48주
+            </p>
+          </div>
+          <div class="panel details">
+            <h2>한눈에 보는 매수 전·후</h2>
+            <table>
+              <caption class="sr-only">
+                추가 매수 전과 후의 보유 수량, 투자금, 현재가 기준 평가손익 비교
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">구분</th>
+                  <th scope="col">매수 전</th>
+                  <th scope="col">매수 후</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">보유 수량</th>
+                  <td id="before-quantity">100주</td>
+                  <td id="after-quantity">148주</td>
+                </tr>
+                <tr>
+                  <th scope="row">총 매입금액</th>
+                  <td id="before-cost">1,800,000원</td>
+                  <td id="after-cost">2,400,000원</td>
+                </tr>
+                <tr>
+                  <th scope="row">평가손익</th>
+                  <td id="before-pnl">−550,000원</td>
+                  <td id="after-pnl">−550,000원</td>
+                </tr>
+                <tr>
+                  <th scope="row">수익률</th>
+                  <td id="before-return">−30.56%</td>
+                  <td id="after-return">−22.92%</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="field-note">평가손익은 입력한 현재가 기준입니다.</p>
+          </div>
+          <button id="copy-result" class="copy-button" type="button">
+            <span aria-hidden="true">▣</span> 계산 결과 복사
+          </button>
+          <p id="copy-status" class="copy-status" role="status"></p>
+        </section>
+      </div>
+      <aside class="explanation">
+        <span class="info-symbol" aria-hidden="true">i</span>
+        <div>
+          <h2>계산은 이렇게 해요</h2>
+          <p>새 평균단가 = (기존 매입금액 + 추가 매수금액) ÷ 총 보유 수량</p>
+          <p class="muted">
+            1주 단위 · 원화 기준 · 수수료와 세금 제외 · 실시간 시세 연동 없음
+          </p>
+        </div>
+      </aside>
+      <noscript
+        ><p class="result-notice">
+          계산기를 사용하려면 브라우저에서 JavaScript를 켜 주세요.
+        </p></noscript
+      >
+    </main>
+    <footer class="site-footer wrap">
+      <span
+        >모아 <span class="footer-dot">·</span> 내 예산에 맞는 작은 계산</span
+      ><span>계산 내용은 서버에 전송되지 않습니다.</span>
+    </footer>
+  </body>
+</html>
